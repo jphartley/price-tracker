@@ -31,14 +31,27 @@ A web application to track product prices on Paul Smith's website and get notifi
 - Node.js 16+
 - npm or yarn
 
-### Backend Setup
+### Quick Setup (Recommended)
+
+1. Clone or download the project
+2. Navigate to the project root directory
+3. Run the setup script:
+   ```bash
+   python setup.py
+   ```
+
+This will automatically set up both backend and frontend dependencies, including installing Playwright browsers.
+
+### Manual Setup
+
+#### Backend Setup
 
 1. Navigate to the backend directory:
    ```bash
-   cd price-tracker/backend
+   cd backend
    ```
 
-2. Create a virtual environment (recommended):
+2. Create a virtual environment:
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
@@ -51,21 +64,14 @@ A web application to track product prices on Paul Smith's website and get notifi
 
 4. Install Playwright browsers:
    ```bash
-   playwright install chromium
+   playwright install
    ```
 
-5. Start the FastAPI server:
+#### Frontend Setup
+
+1. Navigate to the frontend directory:
    ```bash
-   python main.py
-   ```
-
-The API will be available at `http://localhost:8000`
-
-### Frontend Setup
-
-1. In a new terminal, navigate to the frontend directory:
-   ```bash
-   cd price-tracker/frontend
+   cd frontend
    ```
 
 2. Install dependencies:
@@ -73,12 +79,32 @@ The API will be available at `http://localhost:8000`
    npm install
    ```
 
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
+### Running the Application
 
-The frontend will be available at `http://localhost:5173`
+#### Option 1: Using convenience scripts (from project root)
+```bash
+# Terminal 1 - Start backend
+./start-backend.sh
+
+# Terminal 2 - Start frontend  
+./start-frontend.sh
+```
+
+#### Option 2: Manual startup
+```bash
+# Terminal 1 - Backend
+cd backend
+source venv/bin/activate
+python main.py
+
+# Terminal 2 - Frontend
+cd frontend
+npm run dev
+```
+
+- Backend API: `http://localhost:8000`
+- Frontend App: `http://localhost:5173`
+- API Documentation: `http://localhost:8000/docs`
 
 ## Usage
 

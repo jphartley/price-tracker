@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, relationship
 from datetime import datetime
 from pydantic import BaseModel
 from scraper import PaulSmithScraper
@@ -36,7 +36,7 @@ class PriceHistory(Base):
     __tablename__ = "price_history"
     
     id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), index=True)
     price = Column(Float)
     checked_at = Column(DateTime, default=datetime.utcnow)
 
@@ -75,6 +75,9 @@ async def add_product(product: ProductCreate, db: Session = Depends(get_db)):
     if not product_data:
         raise HTTPException(status_code=400, detail="Could not scrape product information")
     
+    if not product_data.get("name") or product_data.get("price") is None:
+        raise HTTPException(status_code=400, detail="Invalid product data - missing name or price")
+    
     # Create product record
     db_product = Product(
         url=product.url,
@@ -107,7 +110,9 @@ async def check_price(product_id: int, db: Session = Depends(get_db)):
     if not product_data:
         raise HTTPException(status_code=400, detail="Could not check price")
     
-    new_price = product_data["price"]
+    new_price = product_data.get("price")
+    if new_price is None:
+        raise HTTPException(status_code=400, detail="Could not extract price from product page")
     
     # Update product current price
     product.current_price = new_price
