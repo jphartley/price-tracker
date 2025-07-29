@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react'
 
 function App() {
+  // Helper function to get currency symbol
+  const getCurrencySymbol = (currency) => {
+    const symbols = {
+      'USD': '$',
+      'GBP': '£',
+      'EUR': '€'
+    }
+    return symbols[currency] || currency
+  }
   const [products, setProducts] = useState([])
   const [newUrl, setNewUrl] = useState('')
   const [loading, setLoading] = useState(false)
@@ -67,7 +76,8 @@ function App() {
 
       if (response.ok) {
         const data = await response.json()
-        setMessage(`Price updated: £${data.new_price} for ${data.name}`)
+        const currencySymbol = getCurrencySymbol(data.currency || 'GBP')
+        setMessage(`Price updated: ${currencySymbol}${data.new_price} for ${data.name}`)
         fetchProducts()
       } else {
         const error = await response.json()
@@ -134,7 +144,9 @@ function App() {
                       </p>
                       <div className="flex items-center gap-4">
                         <span className="text-lg font-semibold text-green-600">
-                          £{product.current_price?.toFixed(2) || 'N/A'}
+                          {product.current_price !== null && product.current_price !== undefined 
+                            ? `${getCurrencySymbol(product.currency)}${product.current_price.toFixed(2)}`
+                            : 'N/A'}
                         </span>
                         <span className="text-sm text-gray-500">
                           Added {new Date(product.created_at).toLocaleDateString()}

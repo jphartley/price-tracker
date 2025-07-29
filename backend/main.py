@@ -30,6 +30,7 @@ class Product(Base):
     url = Column(String, unique=True, index=True)
     name = Column(String, index=True)
     current_price = Column(Float)
+    currency = Column(String, default="GBP")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class PriceHistory(Base):
@@ -82,7 +83,8 @@ async def add_product(product: ProductCreate, db: Session = Depends(get_db)):
     db_product = Product(
         url=product.url,
         name=product_data["name"],
-        current_price=product_data["price"]
+        current_price=product_data["price"],
+        currency=product_data.get("currency", "GBP")
     )
     db.add(db_product)
     db.commit()
@@ -114,8 +116,9 @@ async def check_price(product_id: int, db: Session = Depends(get_db)):
     if new_price is None:
         raise HTTPException(status_code=400, detail="Could not extract price from product page")
     
-    # Update product current price
+    # Update product current price and currency
     product.current_price = new_price
+    product.currency = product_data.get("currency", product.currency)
     db.commit()
     
     # Add to price history
@@ -126,7 +129,7 @@ async def check_price(product_id: int, db: Session = Depends(get_db)):
     db.add(price_record)
     db.commit()
     
-    return {"product_id": product_id, "new_price": new_price, "name": product.name}
+    return {"product_id": product_id, "new_price": new_price, "name": product.name, "currency": product.currency}
 
 @app.get("/products/{product_id}/history")
 async def get_price_history(product_id: int, db: Session = Depends(get_db)):

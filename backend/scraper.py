@@ -167,20 +167,39 @@ class PaulSmithScraper:
         if not price_text:
             return None
             
-        logger.info(f"Extracting price from: '{price_text}'")
+        logger.info(f"Extracting price from: '{price_text[:200]}...'")  # Truncate long text for logging
         
-        # Remove currency symbols and extra whitespace
-        cleaned_text = re.sub(r'[£$€]', '', price_text).strip()
-        
-        # Find price patterns - handle commas as thousands separators
-        price_patterns = [
-            r'(\d{1,3}(?:,\d{3})*\.?\d{0,2})',  # 1,234.56 or 1234.56
-            r'(\d+\.?\d{0,2})',                  # 123.45 or 123
-            r'(\d+,\d{2})'                       # European format 123,45
+        # Find price patterns with currency symbols (most reliable)
+        currency_patterns = [
+            r'\$(\d{1,3}(?:,\d{3})*\.?\d{0,2})', # $1,234.56 or $1234.56
+            r'£(\d{1,3}(?:,\d{3})*\.?\d{0,2})',  # £1,234.56 or £1234.56
+            r'€(\d{1,3}(?:,\d{3})*\.?\d{0,2})',  # €1,234.56 or €1234.56
         ]
         
-        for pattern in price_patterns:
-            matches = re.findall(pattern, cleaned_text)
+        # Try currency patterns first (most reliable)
+        for pattern in currency_patterns:
+            matches = re.findall(pattern, price_text)
+            if matches:
+                price_str = matches[0]  # Take the first match
+                try:
+                    # Remove comma thousands separators
+                    price_str = price_str.replace(',', '')
+                    price = float(price_str)
+                    logger.info(f"Extracted price with currency: {price}")
+                    return price
+                except ValueError as e:
+                    logger.warning(f"Could not convert '{price_str}' to float: {e}")
+                    continue
+        
+        # Fallback to number-only patterns
+        number_patterns = [
+            r'(\d{1,3}(?:,\d{3})*\.\d{2})',   # 1,234.56 (must have 2 decimal places)
+            r'(\d{3,}\.?\d{0,2})',            # 123.45 or 123 (at least 3 digits)
+            r'(\d+,\d{2})'                    # European format 123,45
+        ]
+        
+        for pattern in number_patterns:
+            matches = re.findall(pattern, price_text)
             if matches:
                 price_str = matches[0]
                 try:
@@ -192,13 +211,15 @@ class PaulSmithScraper:
                         price_str = price_str.replace(',', '')
                     
                     price = float(price_str)
-                    logger.info(f"Extracted price: {price}")
-                    return price
+                    # Only accept reasonable prices (between $1 and $10,000)
+                    if 1 <= price <= 10000:
+                        logger.info(f"Extracted price: {price}")
+                        return price
                 except ValueError as e:
                     logger.warning(f"Could not convert '{price_str}' to float: {e}")
                     continue
         
-        logger.warning(f"No valid price found in: '{price_text}'")
+        logger.warning(f"No valid price found in text")
         return None
     
     def extract_currency(self, price_text: str) -> str:
