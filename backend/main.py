@@ -43,7 +43,26 @@ class PriceHistory(Base):
 
 Base.metadata.create_all(bind=engine)
 
+# Global scraper instance for browser reuse
 scraper = PaulSmithScraper()
+
+# Cleanup function for graceful shutdown
+import atexit
+import asyncio
+
+def cleanup_scraper():
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Schedule cleanup for later if loop is running
+            loop.create_task(scraper.close())
+        else:
+            # Run cleanup directly if no loop is running
+            asyncio.run(scraper.close())
+    except:
+        pass  # Ignore cleanup errors
+
+atexit.register(cleanup_scraper)
 
 class ProductCreate(BaseModel):
     url: str
