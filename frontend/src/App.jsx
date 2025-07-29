@@ -143,11 +143,29 @@ function App() {
                         </a>
                       </p>
                       <div className="flex items-center gap-4">
-                        <span className="text-lg font-semibold text-green-600">
-                          {product.current_price !== null && product.current_price !== undefined 
-                            ? `${getCurrencySymbol(product.currency)}${product.current_price.toFixed(2)}`
-                            : 'N/A'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {/* Current/Sale Price */}
+                          <span className="text-lg font-semibold text-green-600">
+                            {product.current_price !== null && product.current_price !== undefined 
+                              ? `${getCurrencySymbol(product.currency)}${product.current_price.toFixed(2)}`
+                              : 'N/A'}
+                          </span>
+                          
+                          {/* Original Price (if different from current price) */}
+                          {product.original_price && product.original_price !== product.current_price && (
+                            <span className="text-sm text-gray-500 line-through">
+                              {`${getCurrencySymbol(product.currency)}${product.original_price.toFixed(2)}`}
+                            </span>
+                          )}
+                          
+                          {/* Sale indicator */}
+                          {product.original_price && product.original_price !== product.current_price && (
+                            <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                              SALE
+                            </span>
+                          )}
+                        </div>
+                        
                         <span className="text-sm text-gray-500">
                           Added {new Date(product.created_at).toLocaleDateString()}
                         </span>

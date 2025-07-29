@@ -85,8 +85,9 @@ class PaulSmithScraper:
                 except:
                     continue
             
-            # Fast price extraction - prioritize sale price selectors first
-            price_text = None
+            # Fast price extraction - detect both sale price and original price
+            sale_price_text = None
+            original_price_text = None
             detected_currency = None
             page_content = await page.content()
             
@@ -108,17 +109,43 @@ class PaulSmithScraper:
                     for element in elements[:2]:  # Check first 2 matches only
                         text = await element.inner_text()
                         if text and any(symbol in text for symbol in ['£', '$', '€']):
-                            price_text = text.strip()
-                            detected_currency = self.extract_currency(price_text)
-                            logger.info(f"Found SALE price with selector '{selector}': {price_text}")
+                            sale_price_text = text.strip()
+                            detected_currency = self.extract_currency(sale_price_text)
+                            logger.info(f"Found SALE price with selector '{selector}': {sale_price_text}")
                             break
-                    if price_text:
+                    if sale_price_text:
+                        break
+                except:
+                    continue
+            
+            # Look for original price selectors (crossed out, struck through, etc.)
+            logger.info("Looking for original price selectors...")
+            original_price_selectors = [
+                ".original-price", ".was-price", ".strike-through", ".crossed-out",
+                ".price-was", ".price-original", ".price-before", ".regular-price",
+                "[data-testid='original-price']", "[data-testid='was-price']",
+                ".price.original", ".price.was", ".price.before",
+                "span[class*='original-price']", "span[class*='was-price']",
+                "div[class*='original-price']", "div[class*='was-price']",
+                "del", "s", ".strikethrough", "[style*='text-decoration: line-through']"
+            ]
+            
+            for selector in original_price_selectors:
+                try:
+                    elements = await page.query_selector_all(selector)
+                    for element in elements[:2]:  # Check first 2 matches only
+                        text = await element.inner_text()
+                        if text and any(symbol in text for symbol in ['£', '$', '€']):
+                            original_price_text = text.strip()
+                            logger.info(f"Found ORIGINAL price with selector '{selector}': {original_price_text}")
+                            break
+                    if original_price_text:
                         break
                 except:
                     continue
             
             # If no sale price found, try regex patterns with sale context
-            if not price_text:
+            if not sale_price_text:
                 logger.info("Looking for sale prices in page content...")
                 
                 # Look for sale price patterns in context
@@ -130,14 +157,31 @@ class PaulSmithScraper:
                 for pattern in sale_context_patterns:
                     matches = re.findall(pattern, page_content, re.IGNORECASE)
                     if matches:
-                        price_text = matches[0]
-                        detected_currency = self.extract_currency(price_text)
-                        logger.info(f"Found SALE price with context pattern: {price_text}")
+                        sale_price_text = matches[0]
+                        detected_currency = self.extract_currency(sale_price_text)
+                        logger.info(f"Found SALE price with context pattern: {sale_price_text}")
                         break
             
-            # If still no sale price, fall back to general price patterns but prefer lower prices
-            if not price_text:
-                logger.info("No sale price found, looking for general prices...")
+            # Look for original price patterns in context (was, originally, etc.)
+            if not original_price_text:
+                logger.info("Looking for original prices in page content...")
+                
+                # Look for original price patterns in context
+                original_context_patterns = [
+                    r'(?:was|originally|before|regular)[^£$€]*([£$€]\d{1,3}(?:,\d{3})*\.?\d{0,2})',
+                    r'([£$€]\d{1,3}(?:,\d{3})*\.?\d{0,2})[^£$€]*(?:was|originally|before|regular)',
+                ]
+                
+                for pattern in original_context_patterns:
+                    matches = re.findall(pattern, page_content, re.IGNORECASE)
+                    if matches:
+                        original_price_text = matches[0]
+                        logger.info(f"Found ORIGINAL price with context pattern: {original_price_text}")
+                        break
+            
+            # If still no prices found, fall back to general price patterns
+            if not sale_price_text and not original_price_text:
+                logger.info("No specific prices found, looking for general prices...")
                 
                 # Look for price patterns with currency symbols
                 currency_patterns = [
@@ -153,7 +197,7 @@ class PaulSmithScraper:
                         for match in matches:
                             found_prices.append((f"{symbol}{match}", currency, float(match.replace(',', ''))))
                 
-                # Choose the best price (current/sale price, not original price)
+                # Choose prices from found matches
                 if found_prices:
                     # Remove duplicates and sort by frequency and context
                     unique_prices = {}
@@ -166,23 +210,23 @@ class PaulSmithScraper:
                     # Convert back to list and sort by frequency, then by value
                     price_candidates = [(value, currency, texts[0], len(texts)) for (value, currency), texts in unique_prices.items()]
                     
-                    # If we have multiple prices, likely sale vs original - take the lower one (sale price)
+                    # If we have multiple prices, assign lowest as sale price and highest as original
                     if len(price_candidates) > 1:
-                        # Sort by value (lowest first) - sale price is usually lower
-                        price_candidates.sort(key=lambda x: x[0])
-                        chosen = price_candidates[0]  # Take lowest price (likely sale price)
-                        logger.info(f"Multiple prices found, choosing lowest: {chosen[2]} (likely sale price)")
+                        price_candidates.sort(key=lambda x: x[0])  # Sort by value (lowest first)
+                        sale_price_text = price_candidates[0][2]  # Lowest price (likely sale)
+                        original_price_text = price_candidates[-1][2]  # Highest price (likely original)
+                        detected_currency = price_candidates[0][1]
+                        logger.info(f"Multiple prices found - Sale: {sale_price_text}, Original: {original_price_text}")
                     else:
-                        # Only one price found, use it
-                        chosen = price_candidates[0]
+                        # Only one price found, use it as the current price
+                        sale_price_text = price_candidates[0][2]
+                        detected_currency = price_candidates[0][1]
+                        logger.info(f"Single price found: {sale_price_text}")
                     
-                    price_text = chosen[2]  # formatted price text
-                    detected_currency = chosen[1]  # currency code
-                    logger.info(f"Found price via regex: {price_text} ({detected_currency})")
                     logger.info(f"All found prices: {[(f'{p[2]} {p[1]}', f'freq:{p[3]}') for p in price_candidates]}")  # Show all with frequency
             
             # Final fallback to general DOM selectors
-            if not price_text:
+            if not sale_price_text:
                 logger.info("Trying general DOM price selectors...")
                 price_selectors = [
                     ".price", ".current-price", ".product-price", 
@@ -196,11 +240,11 @@ class PaulSmithScraper:
                         for element in elements[:3]:  # Check first 3 matches only
                             text = await element.inner_text()
                             if text and any(symbol in text for symbol in ['£', '$', '€']):
-                                price_text = text.strip()
-                                detected_currency = self.extract_currency(price_text)
-                                logger.info(f"Found price with general selector: {price_text}")
+                                sale_price_text = text.strip()
+                                detected_currency = self.extract_currency(sale_price_text)
+                                logger.info(f"Found price with general selector: {sale_price_text}")
                                 break
-                        if price_text:
+                        if sale_price_text:
                             break
                     except:
                         continue
@@ -211,17 +255,29 @@ class PaulSmithScraper:
                 logger.error("Could not find product name")
                 return None
             
-            # Extract numeric price from text
-            price = self.extract_price(price_text) if price_text else None
+            # Extract numeric prices from text
+            current_price = self.extract_price(sale_price_text) if sale_price_text else None
+            original_price = self.extract_price(original_price_text) if original_price_text else None
+            
+            # If we have both prices but current is higher than original, swap them
+            if current_price and original_price and current_price > original_price:
+                current_price, original_price = original_price, current_price
+                logger.info("Swapped prices as current was higher than original")
+            
+            # If we only have one price, use it as the current price
+            if not current_price:
+                current_price = original_price
+                original_price = None
             
             # Use detected currency if available, otherwise fall back to extraction
-            final_currency = detected_currency if 'detected_currency' in locals() else (
-                self.extract_currency(price_text) if price_text else "GBP"
+            final_currency = detected_currency if detected_currency else (
+                self.extract_currency(sale_price_text or original_price_text) if (sale_price_text or original_price_text) else "GBP"
             )
             
             result = {
                 "name": product_name,
-                "price": price,
+                "price": current_price,  # Current/sale price
+                "original_price": original_price,  # Original price if different
                 "currency": final_currency
             }
             

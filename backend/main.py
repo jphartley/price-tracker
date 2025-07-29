@@ -29,7 +29,8 @@ class Product(Base):
     id = Column(Integer, primary_key=True, index=True)
     url = Column(String, unique=True, index=True)
     name = Column(String, index=True)
-    current_price = Column(Float)
+    current_price = Column(Float)  # Sale price or regular price if no sale
+    original_price = Column(Float)  # Original/full price before discount
     currency = Column(String, default="GBP")
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -38,7 +39,8 @@ class PriceHistory(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), index=True)
-    price = Column(Float)
+    price = Column(Float)  # Current/sale price
+    original_price = Column(Float)  # Original price if different from sale
     checked_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
@@ -103,6 +105,7 @@ async def add_product(product: ProductCreate, db: Session = Depends(get_db)):
         url=product.url,
         name=product_data["name"],
         current_price=product_data["price"],
+        original_price=product_data.get("original_price"),
         currency=product_data.get("currency", "GBP")
     )
     db.add(db_product)
@@ -112,7 +115,8 @@ async def add_product(product: ProductCreate, db: Session = Depends(get_db)):
     # Add initial price history
     price_record = PriceHistory(
         product_id=db_product.id,
-        price=product_data["price"]
+        price=product_data["price"],
+        original_price=product_data.get("original_price")
     )
     db.add(price_record)
     db.commit()
@@ -135,20 +139,28 @@ async def check_price(product_id: int, db: Session = Depends(get_db)):
     if new_price is None:
         raise HTTPException(status_code=400, detail="Could not extract price from product page")
     
-    # Update product current price and currency
+    # Update product current price, original price, and currency
     product.current_price = new_price
+    product.original_price = product_data.get("original_price")
     product.currency = product_data.get("currency", product.currency)
     db.commit()
     
     # Add to price history
     price_record = PriceHistory(
         product_id=product_id,
-        price=new_price
+        price=new_price,
+        original_price=product_data.get("original_price")
     )
     db.add(price_record)
     db.commit()
     
-    return {"product_id": product_id, "new_price": new_price, "name": product.name, "currency": product.currency}
+    return {
+        "product_id": product_id, 
+        "new_price": new_price,
+        "original_price": product_data.get("original_price"),
+        "name": product.name, 
+        "currency": product.currency
+    }
 
 @app.get("/products/{product_id}/history")
 async def get_price_history(product_id: int, db: Session = Depends(get_db)):
