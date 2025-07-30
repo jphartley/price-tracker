@@ -162,6 +162,22 @@ async def check_price(product_id: int, db: Session = Depends(get_db)):
         "currency": product.currency
     }
 
+@app.delete("/products/{product_id}")
+async def delete_product(product_id: int, db: Session = Depends(get_db)):
+    # Get product
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Delete price history first (due to foreign key constraint)
+    db.query(PriceHistory).filter(PriceHistory.product_id == product_id).delete()
+    
+    # Delete product
+    db.delete(product)
+    db.commit()
+    
+    return {"message": "Product deleted successfully"}
+
 @app.get("/products/{product_id}/history")
 async def get_price_history(product_id: int, db: Session = Depends(get_db)):
     history = db.query(PriceHistory).filter(PriceHistory.product_id == product_id).order_by(PriceHistory.checked_at.desc()).all()

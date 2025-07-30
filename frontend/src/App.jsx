@@ -91,6 +91,34 @@ function App() {
     setLoading(false)
   }
 
+  const deleteProduct = async (productId, productName) => {
+    if (!confirm(`Are you sure you want to stop tracking "${productName}"?`)) {
+      return
+    }
+
+    setLoading(true)
+    setMessage('')
+
+    try {
+      const response = await fetch(`${API_BASE}/products/${productId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setMessage(`Stopped tracking "${productName}"`)
+        fetchProducts()
+      } else {
+        const error = await response.json()
+        setMessage(`Error: ${error.detail}`)
+      }
+    } catch (error) {
+      setMessage('Error deleting product')
+      console.error('Error:', error)
+    }
+
+    setLoading(false)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
@@ -171,13 +199,23 @@ function App() {
                         </span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => checkPrice(product.id)}
-                      disabled={loading}
-                      className="ml-4 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"
-                    >
-                      Check Price
-                    </button>
+                    <div className="ml-4 flex gap-2">
+                      <button
+                        onClick={() => checkPrice(product.id)}
+                        disabled={loading}
+                        className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"
+                      >
+                        Check Price
+                      </button>
+                      <button
+                        onClick={() => deleteProduct(product.id, product.name)}
+                        disabled={loading}
+                        className="px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
+                        title="Stop tracking this product"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
