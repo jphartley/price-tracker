@@ -144,7 +144,59 @@ class PaulSmithScraper:
                 except:
                     continue
             
-            # If no sale price found, try regex patterns with sale context
+            # Advanced price detection focusing on product area
+            if not sale_price_text or not original_price_text:
+                logger.info("Looking for product-specific price patterns...")
+                
+                # Try to find prices near the product name or in product context
+                product_name_lower = product_name.lower() if product_name else ""
+                
+                # Look for price patterns within a reasonable distance of product-related content
+                product_context_patterns = [
+                    # Prices near product, price, or sale keywords with limited character distance
+                    rf'(?i)(?:.{{0,200}}(?:price|cost|£|$|€).{{0,50}}([£$€]\d{{1,3}}(?:,\d{{3}})*\.?\d{{0,2}}))',
+                    rf'(?i)(?:([£$€]\d{{1,3}}(?:,\d{{3}})*\.?\d{{0,2}}).{{0,50}}(?:price|cost))',
+                    # Look for consecutive prices (often sale + original)
+                    rf'([£$€]\d{{1,3}}(?:,\d{{3}})*\.?\d{{0,2}}).{{0,100}}([£$€]\d{{1,3}}(?:,\d{{3}})*\.?\d{{0,2}})',
+                ]
+                
+                found_price_pairs = []
+                for pattern in product_context_patterns:
+                    matches = re.findall(pattern, page_content, re.IGNORECASE | re.DOTALL)
+                    for match in matches:
+                        if isinstance(match, tuple) and len(match) == 2:
+                            # Two prices found together
+                            price1 = self.extract_price(match[0])
+                            price2 = self.extract_price(match[1])
+                            if price1 and price2 and price1 != price2 and 1 <= min(price1, price2) <= 1000:
+                                found_price_pairs.append((match[0], price1, match[1], price2))
+                                logger.info(f"Found price pair: {match[0]} and {match[1]}")
+                        elif isinstance(match, str):
+                            # Single price found
+                            price = self.extract_price(match)
+                            if price and 1 <= price <= 1000:
+                                if not sale_price_text:
+                                    sale_price_text = match
+                                    detected_currency = self.extract_currency(match)
+                                    logger.info(f"Found single price in context: {match}")
+                
+                # If we found price pairs, use the first pair (assuming it's for this product)
+                if found_price_pairs and not sale_price_text:
+                    pair = found_price_pairs[0]
+                    price1_val, price2_val = pair[1], pair[3]
+                    
+                    # Use lower price as sale price, higher as original
+                    if price1_val < price2_val:
+                        sale_price_text = pair[0]
+                        original_price_text = pair[2]
+                    else:
+                        sale_price_text = pair[2]
+                        original_price_text = pair[0]
+                    
+                    detected_currency = self.extract_currency(sale_price_text)
+                    logger.info(f"Using price pair - Sale: {sale_price_text}, Original: {original_price_text}")
+            
+            # Fallback: Look for sale price patterns in context
             if not sale_price_text:
                 logger.info("Looking for sale prices in page content...")
                 
@@ -162,18 +214,20 @@ class PaulSmithScraper:
                         logger.info(f"Found SALE price with context pattern: {sale_price_text}")
                         break
             
-            # Look for original price patterns in context (was, originally, etc.)
+            # Fallback: Look for original price patterns in context (was, originally, etc.)
             if not original_price_text:
                 logger.info("Looking for original prices in page content...")
                 
                 # Look for original price patterns in context
                 original_context_patterns = [
-                    r'(?:was|originally|before|regular)[^£$€]*([£$€]\d{1,3}(?:,\d{3})*\.?\d{0,2})',
-                    r'([£$€]\d{1,3}(?:,\d{3})*\.?\d{0,2})[^£$€]*(?:was|originally|before|regular)',
+                    r'(?:was|originally|before|regular|rrp)[^£$€]*([£$€]\d{1,3}(?:,\d{3})*\.?\d{0,2})',
+                    r'([£$€]\d{1,3}(?:,\d{3})*\.?\d{0,2})[^£$€]*(?:was|originally|before|regular|rrp)',
+                    r'<del[^>]*>.*?([£$€]\d{1,3}(?:,\d{3})*\.?\d{0,2}).*?</del>',  # Strikethrough tags
+                    r'<s[^>]*>.*?([£$€]\d{1,3}(?:,\d{3})*\.?\d{0,2}).*?</s>',      # Strikethrough tags
                 ]
                 
                 for pattern in original_context_patterns:
-                    matches = re.findall(pattern, page_content, re.IGNORECASE)
+                    matches = re.findall(pattern, page_content, re.IGNORECASE | re.DOTALL)
                     if matches:
                         original_price_text = matches[0]
                         logger.info(f"Found ORIGINAL price with context pattern: {original_price_text}")
