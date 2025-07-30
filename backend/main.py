@@ -82,7 +82,7 @@ async def root():
 
 @app.get("/products")
 async def get_products(db: Session = Depends(get_db)):
-    products = db.query(Product).all()
+    products = db.query(Product).order_by(Product.created_at.desc()).all()
     return products
 
 @app.post("/products")
