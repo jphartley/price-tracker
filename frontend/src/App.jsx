@@ -120,11 +120,15 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Price Tracker</h1>
-          <p className="text-gray-600 mb-6">Track Paul Smith product prices and get notified of drops</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Paul Smith inspired stripe header */}
+      <div className="h-2 bg-gradient-to-r from-purple-500 via-pink-500 via-blue-500 via-green-500 to-orange-500"></div>
+      
+      <div className="py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent mb-2">Price Tracker</h1>
+            <p className="text-gray-600 mb-6">Track Paul Smith product prices and get notified of drops</p>
 
           <form onSubmit={addProduct} className="mb-6">
             <div className="flex gap-3">
@@ -221,6 +225,7 @@ function App() {
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
